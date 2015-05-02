@@ -10,12 +10,28 @@ our $VERSION = '0.1';
 
 my %opts;
 my $dockerfile_base;
+my $env_base = "$ENV{HOME}/envs";
 
 my $command_aliases = { 'ls' => 'list', };
 
 my $commands = {
     'create' => sub {
-        INFO("Nothing yet...");
+        my $argv = shift;
+
+        GetOptionsFromArray( $argv, \%opts, 'type|t=s' );
+        my $env_name = shift(@$argv);
+        if (!$env_name) {
+            ERROR("Specify name of environment.");
+            exit(-2);
+        }
+
+        my $type = $opts{type};
+        if (!$type) {
+            ERROR("Specify type of environment with the --type option.");
+            exit(-2);
+        }
+
+        create_env($env_name, $type);
     },
     'destroy' => sub {
         my $argv = shift;
@@ -32,11 +48,7 @@ my $commands = {
         INFO("Nothing yet...");
     },
     'list' => sub {
-        my $argv = shift;
-
-        # GetOptionsFromArray( $argv, \%opts, 'merge', 'no-fetch' );
-
-        INFO("Nothing yet...");
+        list_envs();
     },
     'connect' => sub {
         my $argv = shift;
@@ -123,6 +135,108 @@ sub run_ddc {
     }
 }
 
+sub create_env {
+    my ($env_name, $type) = @_;
+
+    ensure_ssh_key();
+
+    my $existing = load_existing();
+    if ($existing->{$env_name}) {
+        ERROR("Environment $env_name already exists.");
+        exit(-2);
+    }
+
+    ensure_image($type);
+
+    my $env_dir = "$env_base/$env_name";
+    my $image_name = "nate/${type}dev:latest";
+    mkdir $env_dir;
+
+    `docker run -d -p 22 --name ddc_$env_name -v $env_dir:/home/nate -v $ENV{PWD}:/home/nate/dev --hostname $env_name $image_name`;
+
+}
+
+sub ensure_ssh_key {
+
+}
+
+sub ensure_image {
+
+}
+
+sub load_existing {
+
+    if (! -e $env_base) {
+        mkdir $env_base
+    }
+
+    my @docker_ps_output = split(/\n/, `docker ps -a`);
+    my $containers;
+    foreach my $docker_line (@docker_ps_output) {
+        next if $docker_line =~ m/COMMAND/;
+        my @elements = split(/\s\s+/, $docker_line);
+        my $name;
+        if (scalar @elements == 7) {
+            $name = $elements[6];
+        }
+        if (scalar @elements == 6) {
+            $name = $elements[5];
+        }
+
+        if ($name) {
+            $containers->{$name}{running} = $elements[4] =~ m/Up/ ? 1 : 0;
+            $containers->{$name}{image} = $elements[1];
+            $containers->{$name}{container} = $elements[0];
+        }
+    }
+    # print STDERR Dumper($containers); use Data::Dumper;
+
+    my $existing_envs = {};
+    opendir (DIR, $env_base) or die $!;
+    my @dirs = grep { $_ ne '.' && $_ ne '..' } readdir(DIR);
+    foreach my $env_dir (@dirs) {
+        # print "$env_dir\n";
+
+        my $container = $containers->{"ddc_$env_dir"};
+        $existing_envs->{$env_dir} = {
+            container => $container
+        };
+
+        if ($container) {
+            my $image = $container->{image};
+            my ($type) = $image =~ m/nate\/(.+)dev:latest/;
+            $existing_envs->{$env_dir}{type} = $type;
+        }
+    }
+
+
+    return $existing_envs;
+}
+
+sub list_envs {
+    my $existing = load_existing();
+    foreach my $env (keys %$existing) {
+        print $env;
+
+        if (my $type = $existing->{$env}{type}) {
+            print " [type: $type]";
+        }
+        if (my $container = $existing->{$env}{container}) {
+
+            if ($container->{running}) {
+                print " [running]";
+            }
+            else {
+                print " [stopped]";
+            }
+        }
+        else {
+            print " [no container]";
+        }
+
+        print "\n";
+    }
+}
 # a few log4perl-alikes
 sub ERROR {
     printf "ERROR: %s\n", shift;

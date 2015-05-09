@@ -4,6 +4,8 @@ use strict;
 use warnings;
 use English qw( -no_match_vars );    # Avoids regex performance penalty
 use Getopt::Long;
+use File::Spec;
+use File::Copy;
 use Pod::Usage;
 
 our $VERSION = '0.1';
@@ -12,18 +14,24 @@ my %opts;
 my $dockerfile_base;
 my $env_base = "$ENV{HOME}/envs";
 
+# TODO: allow specifying these
+my $user = $ENV{'USER'};
+my $docker_user = $user;
+
 my $command_aliases = { 'ls' => 'list', };
 
 my $commands = {
     'create' => sub {
         my $argv = shift;
 
-        GetOptionsFromArray( $argv, \%opts, 'type|t=s' );
+        GetOptionsFromArray( $argv, \%opts, 'type|t=s', 'directory|d=s' );
         my $env_name = shift(@$argv);
         if (!$env_name) {
             ERROR("Specify name of environment.");
             exit(-2);
         }
+
+        my $project_directory = $opts{directory} || $ENV{PWD};
 
         my $type = $opts{type};
         if (!$type) {
@@ -31,7 +39,7 @@ my $commands = {
             exit(-2);
         }
 
-        create_env($env_name, $type);
+        create_env($env_name, $type, $project_directory);
     },
     'destroy' => sub {
         my $argv = shift;
@@ -136,9 +144,9 @@ sub run_ddc {
 }
 
 sub create_env {
-    my ($env_name, $type) = @_;
+    my ($env_name, $type, $project_dir) = @_;
 
-    ensure_ssh_key();
+    my ($priv, $pub) = ensure_ssh_key();
 
     my $existing = load_existing();
     if ($existing->{$env_name}) {
@@ -147,17 +155,36 @@ sub create_env {
     }
 
     ensure_image($type);
+    my ( @elements ) = File::Spec->splitdir($project_dir);
+    my $topmost_pathpart = pop @elements;
 
     my $env_dir = "$env_base/$env_name";
-    my $image_name = "nate/${type}dev:latest";
-    mkdir $env_dir;
+    ensure_dir($env_dir);
+    ensure_dir("$env_dir/.ssh", 0700);
+    copy($pub, "$env_dir/.ssh/authorized_keys");
 
-    `docker run -d -p 22 --name ddc_$env_name -v $env_dir:/home/nate -v $ENV{PWD}:/home/nate/dev --hostname $env_name $image_name`;
+    my $image_name = "$docker_user/${type}dev:latest";
+    my $cmd = "docker run -d -p 22 --name ddc_$env_name -v $env_dir:/home/$user -v $ENV{PWD}:/home/$user/$topmost_pathpart --hostname $env_name $image_name";
+    DEBUG($cmd);
+    `$cmd`;
+}
 
+sub ensure_dir {
+    my ($path, $mode) = @_;
+
+    mkdir $path;
+    if ($mode) {
+        chmod $mode, $path;
+    }
 }
 
 sub ensure_ssh_key {
+    if (! -e "$ENV{HOME}/.ssh/ddc_key") {
+        INFO("Creating internal ssh-key");
+        `ssh-keygen -q -t rsa -N '' -C 'ddc key' -f $ENV{HOME}/.ssh/ddc_key`;
+    }
 
+    return ("$ENV{HOME}/.ssh/ddc_key", "$ENV{HOME}/.ssh/ddc_key.pub");
 }
 
 sub ensure_image {
@@ -176,17 +203,30 @@ sub load_existing {
         next if $docker_line =~ m/COMMAND/;
         my @elements = split(/\s\s+/, $docker_line);
         my $name;
+        my $ports;
         if (scalar @elements == 7) {
             $name = $elements[6];
+            $ports = $elements[5];
         }
         if (scalar @elements == 6) {
             $name = $elements[5];
+            $ports = $elements[4];
         }
-
         if ($name) {
             $containers->{$name}{running} = $elements[4] =~ m/Up/ ? 1 : 0;
             $containers->{$name}{image} = $elements[1];
             $containers->{$name}{container} = $elements[0];
+
+            foreach my $ip_port (split(/, /, $ports)) {
+                # 0.0.0.0:32772->22/tcp
+                if ( my ($ext_bind, $ext_port, $int_port) = $ip_port =~ m/([\d.]+):(\d+)->(\d+)\/(tcp|udp)/) {
+                    $containers->{$name}{ports}{$int_port} = {
+                        port => $ext_port,
+                        bind => $ext_bind,
+                    };
+                }
+            }
+
         }
     }
     # print STDERR Dumper($containers); use Data::Dumper;
@@ -204,7 +244,7 @@ sub load_existing {
 
         if ($container) {
             my $image = $container->{image};
-            my ($type) = $image =~ m/nate\/(.+)dev:latest/;
+            my ($type) = $image =~ m/$docker_user\/(.+)dev:latest/;
             $existing_envs->{$env_dir}{type} = $type;
         }
     }

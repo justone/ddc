@@ -59,6 +59,42 @@ $commands = {
     'list' => sub {
         list_envs();
     },
+    'stop' => sub {
+        my $argv = shift;
+
+        GetOptionsFromArray( $argv, \%opts, 'all|a' );
+
+        if ( $opts{all} ) {
+            stop_all_envs();
+        }
+        else {
+            my $env_name = shift(@$argv);
+            if ( !$env_name ) {
+                ERROR("Specify name of environment.");
+                exit(-2);
+            }
+
+            stop_env($env_name);
+        }
+    },
+    'start' => sub {
+        my $argv = shift;
+
+        GetOptionsFromArray( $argv, \%opts, 'all|a' );
+
+        if ( $opts{all} ) {
+            start_all_envs();
+        }
+        else {
+            my $env_name = shift(@$argv);
+            if ( !$env_name ) {
+                ERROR("Specify name of environment.");
+                exit(-2);
+            }
+
+            start_env($env_name);
+        }
+    },
     'connect' => sub {
         my $argv = shift;
 
@@ -293,6 +329,8 @@ sub list_envs {
 sub connect_env {
     my ( $env_name, $type, $project_dir ) = @_;
 
+    start_env($env_name);
+
     my ( $priv, $pub ) = ensure_ssh_key();
 
     my $existing = load_existing();
@@ -312,6 +350,68 @@ sub connect_env {
         'StrictHostKeyChecking no'
     );
     exec @cmd;
+}
+
+sub stop_env {
+    my ($env_name) = @_;
+
+    my $existing = load_existing();
+    if ( !$existing->{$env_name} ) {
+        ERROR("Environment $env_name does not exist.");
+        exit(-2);
+    }
+
+    if ( defined( $existing->{$env_name}{container} )
+        && $existing->{$env_name}{container}{running} )
+    {
+        my $cmd = "docker stop ddc_$env_name";
+        DEBUG($cmd);
+        `$cmd`;
+    }
+}
+
+sub stop_all_envs {
+    my $existing = load_existing();
+    foreach my $env ( keys %$existing ) {
+        if ( defined( $existing->{$env}{container} )
+            && $existing->{$env}{container}{running} )
+        {
+            my $cmd = "docker stop ddc_$env";
+            DEBUG($cmd);
+            `$cmd`;
+        }
+    }
+}
+
+sub start_env {
+    my ($env_name) = @_;
+
+    my $existing = load_existing();
+    if ( !$existing->{$env_name} ) {
+        ERROR("Environment $env_name does not exist.");
+        exit(-2);
+    }
+
+    if ( defined( $existing->{$env_name}{container} )
+        && !$existing->{$env_name}{container}{running} )
+    {
+        my $cmd = "docker start ddc_$env_name";
+        DEBUG($cmd);
+        `$cmd`;
+    }
+}
+
+sub start_all_envs {
+    my $existing = load_existing();
+    foreach my $env ( keys %$existing ) {
+        if ( defined( $existing->{$env}{container} )
+            && !$existing->{$env}{container}{running} )
+        {
+            my $cmd = "docker start ddc_$env";
+            DEBUG($cmd);
+            `$cmd`;
+        }
+    }
 }
 
 # a few log4perl-alikes
@@ -468,6 +568,38 @@ Examples:
 Description:
 
 This will list environments.
+
+=head1 STOP
+
+All Options:
+
+  ddc stop <name> [--verbose|--quiet] [--dry-run]
+  ddc stop --all [--verbose|--quiet] [--dry-run]
+
+Examples:
+
+  ddc stop proj1
+  ddc stop --all
+
+Description:
+
+This will stop a particular environment, or all environments.
+
+=head1 START
+
+All Options:
+
+  ddc start <name> [--verbose|--quiet] [--dry-run]
+  ddc start --all [--verbose|--quiet] [--dry-run]
+
+Examples:
+
+  ddc start proj1
+  ddc start --all
+
+Description:
+
+This will start a particular environment, or all environments.
 
 =head1 AUTHOR
 

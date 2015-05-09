@@ -27,7 +27,7 @@ $commands = {
         my $argv = shift;
 
         GetOptionsFromArray( $argv, \%opts, 'type|t=s', 'directory|d=s' );
-        my $env_name = shift(@$argv);
+        my ($env_name) = @$argv;
         if ( !$env_name ) {
             ERROR("Specify name of environment.");
             exit(-2);
@@ -46,7 +46,7 @@ $commands = {
     'destroy' => sub {
         my $argv = shift;
 
-        my $env_name = shift(@$argv);
+        my ($env_name) = @$argv;
         if ( !$env_name ) {
             ERROR("Specify name of environment.");
             exit(-2);
@@ -57,9 +57,15 @@ $commands = {
     'run' => sub {
         my $argv = shift;
 
-        my $argv_copy = [@$argv];
+        Getopt::Long::Configure('pass_through');
+        GetOptionsFromArray( $argv, \%opts, 'rm|r' );
+        Getopt::Long::Configure('no_pass_through');
+
         $commands->{'create'}->($argv);
-        $commands->{'connect'}->($argv_copy);
+        $commands->{'connect'}->($argv);
+        if ( $opts{rm} ) {
+            $commands->{'destroy'}->($argv);
+        }
     },
     'list' => sub {
         list_envs();
@@ -73,7 +79,7 @@ $commands = {
             stop_all_envs();
         }
         else {
-            my $env_name = shift(@$argv);
+            my ($env_name) = @$argv;
             if ( !$env_name ) {
                 ERROR("Specify name of environment.");
                 exit(-2);
@@ -91,7 +97,7 @@ $commands = {
             start_all_envs();
         }
         else {
-            my $env_name = shift(@$argv);
+            my ($env_name) = @$argv;
             if ( !$env_name ) {
                 ERROR("Specify name of environment.");
                 exit(-2);
@@ -103,7 +109,7 @@ $commands = {
     'connect' => sub {
         my $argv = shift;
 
-        my $env_name = shift(@$argv);
+        my ($env_name) = @$argv;
         if ( !$env_name ) {
             ERROR("Specify name of environment.");
             exit(-2);
@@ -114,7 +120,7 @@ $commands = {
     'help' => sub {
         my $argv = shift;
 
-        my $command = shift @$argv;
+        my ($command) = @$argv;
 
         if ($command) {
             $command = $command_aliases->{$command} || $command;
@@ -345,7 +351,7 @@ sub connect_env {
         '-o',
         'StrictHostKeyChecking no'
     );
-    exec @cmd;
+    system @cmd;
 }
 
 sub stop_env {

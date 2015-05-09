@@ -209,8 +209,8 @@ sub create_env {
     my $topmost_pathpart = pop @elements;
 
     my $env_dir = "$env_base/$env_name";
-    ensure_dir($env_dir);
-    ensure_dir( "$env_dir/.ssh", 0700 );
+    mkpath($env_dir);
+    mkpath( "$env_dir/.ssh", 0, 0700 );
     copy( $pub, "$env_dir/.ssh/authorized_keys" );
 
     my $image_name = "$docker_user/${type}dev:latest";
@@ -218,15 +218,6 @@ sub create_env {
         = "docker run -d -p 22 --name ddc_$env_name -v $env_dir:/home/$user -v $ENV{PWD}:/home/$user/$topmost_pathpart --hostname $env_name $image_name";
     DEBUG($cmd);
     `$cmd`;
-}
-
-sub ensure_dir {
-    my ( $path, $mode ) = @_;
-
-    mkdir $path;
-    if ($mode) {
-        chmod $mode, $path;
-    }
 }
 
 sub ensure_ssh_key {

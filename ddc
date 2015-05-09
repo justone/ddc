@@ -15,18 +15,19 @@ my $dockerfile_base;
 my $env_base = "$ENV{HOME}/envs";
 
 # TODO: allow specifying these
-my $user = $ENV{'USER'};
+my $user        = $ENV{'USER'};
 my $docker_user = $user;
 
 my $command_aliases = { 'ls' => 'list', };
 
-my $commands; $commands = {
+my $commands;
+$commands = {
     'create' => sub {
         my $argv = shift;
 
         GetOptionsFromArray( $argv, \%opts, 'type|t=s', 'directory|d=s' );
         my $env_name = shift(@$argv);
-        if (!$env_name) {
+        if ( !$env_name ) {
             ERROR("Specify name of environment.");
             exit(-2);
         }
@@ -34,12 +35,12 @@ my $commands; $commands = {
         my $project_directory = $opts{directory} || $ENV{PWD};
 
         my $type = $opts{type};
-        if (!$type) {
+        if ( !$type ) {
             ERROR("Specify type of environment with the --type option.");
             exit(-2);
         }
 
-        create_env($env_name, $type, $project_directory);
+        create_env( $env_name, $type, $project_directory );
     },
     'destroy' => sub {
         my $argv = shift;
@@ -62,7 +63,7 @@ my $commands; $commands = {
         my $argv = shift;
 
         my $env_name = shift(@$argv);
-        if (!$env_name) {
+        if ( !$env_name ) {
             ERROR("Specify name of environment.");
             exit(-2);
         }
@@ -91,10 +92,10 @@ my $commands; $commands = {
     },
 };
 
-run_ddc( @ARGV ) unless defined caller;
+run_ddc(@ARGV) unless defined caller;
 
 sub run_ddc {
-    my ( @argv ) = @_;
+    my (@argv) = @_;
 
     # set options to nothing so that running multiple times in tests
     # does not reuse options
@@ -130,8 +131,10 @@ sub run_ddc {
 
     # get dockerfile dir
     $dockerfile_base = $ENV{DDC_DOCKERFILES};
-    if (! $dockerfile_base) {
-        ERROR("Please specify the base directory for Dockerfiles with the DDC_DOCKERFILES environment variable.");
+    if ( !$dockerfile_base ) {
+        ERROR(
+            "Please specify the base directory for Dockerfiles with the DDC_DOCKERFILES environment variable."
+        );
         exit(-2);
     }
 
@@ -150,33 +153,34 @@ sub run_ddc {
 }
 
 sub create_env {
-    my ($env_name, $type, $project_dir) = @_;
+    my ( $env_name, $type, $project_dir ) = @_;
 
-    my ($priv, $pub) = ensure_ssh_key();
+    my ( $priv, $pub ) = ensure_ssh_key();
 
     my $existing = load_existing();
-    if ($existing->{$env_name}) {
+    if ( $existing->{$env_name} ) {
         ERROR("Environment $env_name already exists.");
         exit(-2);
     }
 
     ensure_image($type);
-    my ( @elements ) = File::Spec->splitdir($project_dir);
+    my (@elements) = File::Spec->splitdir($project_dir);
     my $topmost_pathpart = pop @elements;
 
     my $env_dir = "$env_base/$env_name";
     ensure_dir($env_dir);
-    ensure_dir("$env_dir/.ssh", 0700);
-    copy($pub, "$env_dir/.ssh/authorized_keys");
+    ensure_dir( "$env_dir/.ssh", 0700 );
+    copy( $pub, "$env_dir/.ssh/authorized_keys" );
 
     my $image_name = "$docker_user/${type}dev:latest";
-    my $cmd = "docker run -d -p 22 --name ddc_$env_name -v $env_dir:/home/$user -v $ENV{PWD}:/home/$user/$topmost_pathpart --hostname $env_name $image_name";
+    my $cmd
+        = "docker run -d -p 22 --name ddc_$env_name -v $env_dir:/home/$user -v $ENV{PWD}:/home/$user/$topmost_pathpart --hostname $env_name $image_name";
     DEBUG($cmd);
     `$cmd`;
 }
 
 sub ensure_dir {
-    my ($path, $mode) = @_;
+    my ( $path, $mode ) = @_;
 
     mkdir $path;
     if ($mode) {
@@ -185,12 +189,12 @@ sub ensure_dir {
 }
 
 sub ensure_ssh_key {
-    if (! -e "$ENV{HOME}/.ssh/ddc_key") {
+    if ( !-e "$ENV{HOME}/.ssh/ddc_key" ) {
         INFO("Creating internal ssh-key");
         `ssh-keygen -q -t rsa -N '' -C 'ddc key' -f $ENV{HOME}/.ssh/ddc_key`;
     }
 
-    return ("$ENV{HOME}/.ssh/ddc_key", "$ENV{HOME}/.ssh/ddc_key.pub");
+    return ( "$ENV{HOME}/.ssh/ddc_key", "$ENV{HOME}/.ssh/ddc_key.pub" );
 }
 
 sub ensure_image {
@@ -199,33 +203,36 @@ sub ensure_image {
 
 sub load_existing {
 
-    if (! -e $env_base) {
+    if ( !-e $env_base ) {
         mkdir $env_base
     }
 
-    my @docker_ps_output = split(/\n/, `docker ps -a`);
+    my @docker_ps_output = split( /\n/, `docker ps -a` );
     my $containers;
     foreach my $docker_line (@docker_ps_output) {
         next if $docker_line =~ m/COMMAND/;
-        my @elements = split(/\s\s+/, $docker_line);
+        my @elements = split( /\s\s+/, $docker_line );
         my $name;
         my $ports;
-        if (scalar @elements == 7) {
-            $name = $elements[6];
+        if ( scalar @elements == 7 ) {
+            $name  = $elements[6];
             $ports = $elements[5];
         }
-        if (scalar @elements == 6) {
-            $name = $elements[5];
+        if ( scalar @elements == 6 ) {
+            $name  = $elements[5];
             $ports = $elements[4];
         }
         if ($name) {
-            $containers->{$name}{running} = $elements[4] =~ m/Up/ ? 1 : 0;
-            $containers->{$name}{image} = $elements[1];
+            $containers->{$name}{running}   = $elements[4] =~ m/Up/ ? 1 : 0;
+            $containers->{$name}{image}     = $elements[1];
             $containers->{$name}{container} = $elements[0];
 
-            foreach my $ip_port (split(/, /, $ports)) {
+            foreach my $ip_port ( split( /, /, $ports ) ) {
+
                 # 0.0.0.0:32772->22/tcp
-                if ( my ($ext_bind, $ext_port, $int_port) = $ip_port =~ m/([\d.]+):(\d+)->(\d+)\/(tcp|udp)/) {
+                if ( my ( $ext_bind, $ext_port, $int_port )
+                    = $ip_port =~ m/([\d.]+):(\d+)->(\d+)\/(tcp|udp)/ )
+                {
                     $containers->{$name}{ports}{$int_port} = {
                         port => $ext_port,
                         bind => $ext_bind,
@@ -235,18 +242,18 @@ sub load_existing {
 
         }
     }
+
     # print STDERR Dumper($containers); use Data::Dumper;
 
     my $existing_envs = {};
-    opendir (DIR, $env_base) or die $!;
+    opendir( DIR, $env_base ) or die $!;
     my @dirs = grep { $_ ne '.' && $_ ne '..' } readdir(DIR);
     foreach my $env_dir (@dirs) {
+
         # print "$env_dir\n";
 
         my $container = $containers->{"ddc_$env_dir"};
-        $existing_envs->{$env_dir} = {
-            container => $container
-        };
+        $existing_envs->{$env_dir} = { container => $container };
 
         if ($container) {
             my $image = $container->{image};
@@ -255,21 +262,20 @@ sub load_existing {
         }
     }
 
-
     return $existing_envs;
 }
 
 sub list_envs {
     my $existing = load_existing();
-    foreach my $env (keys %$existing) {
+    foreach my $env ( keys %$existing ) {
         print $env;
 
-        if (my $type = $existing->{$env}{type}) {
+        if ( my $type = $existing->{$env}{type} ) {
             print " [type: $type]";
         }
-        if (my $container = $existing->{$env}{container}) {
+        if ( my $container = $existing->{$env}{container} ) {
 
-            if ($container->{running}) {
+            if ( $container->{running} ) {
                 print " [running]";
             }
             else {
@@ -285,17 +291,26 @@ sub list_envs {
 }
 
 sub connect_env {
-    my ($env_name, $type, $project_dir) = @_;
+    my ( $env_name, $type, $project_dir ) = @_;
 
-    my ($priv, $pub) = ensure_ssh_key();
+    my ( $priv, $pub ) = ensure_ssh_key();
 
     my $existing = load_existing();
-    if (!$existing->{$env_name}) {
+    if ( !$existing->{$env_name} ) {
         ERROR("Environment $env_name does not exist.");
         exit(-2);
     }
 
-    my @cmd = (qw(ssh -A localhost -p), $existing->{$env_name}{container}{ports}{22}{port}, '-i', $priv, '-o', 'UserKnownHostsFile /dev/null', '-o', 'StrictHostKeyChecking no');
+    my @cmd = (
+        qw(ssh -A localhost -p),
+        $existing->{$env_name}{container}{ports}{22}{port},
+        '-i',
+        $priv,
+        '-o',
+        'UserKnownHostsFile /dev/null',
+        '-o',
+        'StrictHostKeyChecking no'
+    );
     exec @cmd;
 }
 

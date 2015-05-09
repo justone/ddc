@@ -61,7 +61,13 @@ my $commands = {
     'connect' => sub {
         my $argv = shift;
 
-        INFO("Nothing yet...");
+        my $env_name = shift(@$argv);
+        if (!$env_name) {
+            ERROR("Specify name of environment.");
+            exit(-2);
+        }
+
+        connect_env($env_name);
     },
     'help' => sub {
         my $argv = shift;
@@ -277,6 +283,22 @@ sub list_envs {
         print "\n";
     }
 }
+
+sub connect_env {
+    my ($env_name, $type, $project_dir) = @_;
+
+    my ($priv, $pub) = ensure_ssh_key();
+
+    my $existing = load_existing();
+    if (!$existing->{$env_name}) {
+        ERROR("Environment $env_name does not exist.");
+        exit(-2);
+    }
+
+    my @cmd = (qw(ssh -A localhost -p), $existing->{$env_name}{container}{ports}{22}{port}, '-i', $priv, '-o', 'UserKnownHostsFile /dev/null', '-o', 'StrictHostKeyChecking no');
+    exec @cmd;
+}
+
 # a few log4perl-alikes
 sub ERROR {
     printf "ERROR: %s\n", shift;

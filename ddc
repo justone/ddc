@@ -20,7 +20,7 @@ my $docker_user = $user;
 
 my $command_aliases = { 'ls' => 'list', };
 
-my $commands = {
+my $commands; $commands = {
     'create' => sub {
         my $argv = shift;
 
@@ -51,9 +51,9 @@ my $commands = {
     'run' => sub {
         my $argv = shift;
 
-        # GetOptionsFromArray( $argv, \%opts, 'merge', 'rebase' );
-
-        INFO("Nothing yet...");
+        my $argv_copy = [@$argv];
+        $commands->{'create'}->($argv);
+        $commands->{'connect'}->($argv_copy);
     },
     'list' => sub {
         list_envs();

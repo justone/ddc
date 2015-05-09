@@ -6,6 +6,7 @@ use English qw( -no_match_vars );    # Avoids regex performance penalty
 use Getopt::Long;
 use File::Spec;
 use File::Copy;
+use File::Path;
 use Pod::Usage;
 
 our $VERSION = '0.1';
@@ -18,7 +19,7 @@ my $env_base = "$ENV{HOME}/envs";
 my $user        = $ENV{'USER'};
 my $docker_user = $user;
 
-my $command_aliases = { 'ls' => 'list', };
+my $command_aliases = { 'ls' => 'list', 'rm' => 'destroy', };
 
 my $commands;
 $commands = {
@@ -45,9 +46,13 @@ $commands = {
     'destroy' => sub {
         my $argv = shift;
 
-        # GetOptionsFromArray( $argv, \%opts, 'no-fetch' );
+        my $env_name = shift(@$argv);
+        if ( !$env_name ) {
+            ERROR("Specify name of environment.");
+            exit(-2);
+        }
 
-        INFO("Nothing yet...");
+        destroy_env($env_name);
     },
     'run' => sub {
         my $argv = shift;
@@ -411,6 +416,29 @@ sub start_all_envs {
             DEBUG($cmd);
             `$cmd`;
         }
+    }
+}
+
+sub destroy_env {
+    my ($env_name) = @_;
+
+    stop_env($env_name);
+
+    my $existing = load_existing();
+    if ( !$existing->{$env_name} ) {
+        ERROR("Environment $env_name does not exist.");
+        exit(-2);
+    }
+
+    if ( defined( $existing->{$env_name}{container} ) ) {
+        my $cmd = "docker rm ddc_$env_name";
+        DEBUG($cmd);
+        `$cmd`;
+    }
+
+    my $env_dir = "$env_base/$env_name";
+    if ( -e $env_dir ) {
+        rmtree($env_dir)
     }
 }
 

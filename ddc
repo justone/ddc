@@ -237,6 +237,7 @@ sub ensure_ssh_key {
 
 sub ensure_image {
 
+    # TODO: implement
 }
 
 sub load_existing {

@@ -330,7 +330,7 @@ sub list_envs {
 }
 
 sub connect_env {
-    my ( $env_name, $type, $project_dir ) = @_;
+    my ($env_name) = @_;
 
     start_env($env_name);
 

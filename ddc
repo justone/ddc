@@ -117,6 +117,17 @@ $commands = {
 
         connect_env($env_name);
     },
+    'rebuild' => sub {
+        my $argv = shift;
+
+        my ($env_name) = @$argv;
+        if ( !$env_name ) {
+            ERROR("Specify name of environment.");
+            exit(-2);
+        }
+
+        rebuild_env($env_name);
+    },
     'help' => sub {
         my $argv = shift;
 
@@ -265,6 +276,7 @@ sub load_existing {
             $containers->{$name}{running}   = $elements[4] =~ m/Up/ ? 1 : 0;
             $containers->{$name}{image}     = $elements[1];
             $containers->{$name}{container} = $elements[0];
+            $containers->{$name}{name}      = $name;
 
             foreach my $ip_port ( split( /, /, $ports ) ) {
 
@@ -429,15 +441,48 @@ sub destroy_env {
     }
 
     if ( defined( $existing->{$env_name}{container} ) ) {
-        my $cmd = "docker rm ddc_$env_name";
-        DEBUG($cmd);
-        `$cmd`;
+        _destroy_container( $existing->{$env_name}{container}{name} );
     }
 
     my $env_dir = "$env_base/$env_name";
     if ( -e $env_dir ) {
         rmtree($env_dir)
     }
+}
+
+sub rebuild_env {
+    my ($env_name) = @_;
+
+    my $existing = load_existing();
+    if ( !$existing->{$env_name} ) {
+        ERROR("Environment $env_name does not exist.");
+        exit(-2);
+    }
+
+    stop_env($env_name);
+
+    my $env_dir    = "$env_base/$env_name";
+    my $type       = $existing->{$env_name}{type};
+    my $image_name = "$docker_user/${type}dev:latest";
+
+    my $cmd = "docker rename ddc_${env_name} ddc_${env_name}_old";
+    DEBUG($cmd);
+    `$cmd`;
+
+    $cmd
+        = "docker run -d -p 22 --name ddc_$env_name --volumes-from ddc_${env_name}_old --hostname $env_name $image_name";
+    DEBUG($cmd);
+    `$cmd`;
+
+    _destroy_container("ddc_${env_name}_old");
+}
+
+sub _destroy_container {
+    my ($container) = @_;
+
+    my $cmd = "docker rm $container";
+    DEBUG($cmd);
+    `$cmd`;
 }
 
 # a few log4perl-alikes
@@ -626,6 +671,20 @@ Examples:
 Description:
 
 This will start a particular environment, or all environments.
+
+=head1 REBUILD
+
+All Options:
+
+  ddc rebuild <name> [--verbose|--quiet] [--dry-run]
+
+Examples:
+
+  ddc rebuild proj1
+
+Description:
+
+This will re-create a particular environment's container, using the latest image.
 
 =head1 AUTHOR
 

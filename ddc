@@ -216,7 +216,9 @@ sub create_env {
     my ( $priv, $pub ) = ensure_ssh_key();
 
     my $existing = load_existing();
-    if ( $existing->{$env_name} ) {
+    if ( $existing->{$env_name}
+        && defined( $existing->{$env_name}{container} ) )
+    {
         ERROR("Environment $env_name already exists.");
         exit(-2);
     }

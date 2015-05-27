@@ -26,7 +26,7 @@ $commands = {
     'create' => sub {
         my $argv = shift;
 
-        GetOptionsFromArray( $argv, \%opts, 'type|t=s', 'directory|d=s' );
+        GetOptionsFromArray( $argv, \%opts, 'type|t=s', 'directory|d=s', 'port|p=s@' );
         my ($env_name) = @$argv;
         if ( !$env_name ) {
             ERROR("Specify name of environment.");
@@ -41,7 +41,7 @@ $commands = {
             exit(-2);
         }
 
-        create_env( $env_name, $type, $project_directory );
+        create_env( $env_name, $type, $project_directory, \%opts );
     },
     'destroy' => sub {
         my $argv = shift;
@@ -211,7 +211,12 @@ sub run_ddc {
 }
 
 sub create_env {
-    my ( $env_name, $type, $project_dir ) = @_;
+    my ( $env_name, $type, $project_dir, $opts ) = @_;
+
+    my $port_opts = '';
+    if (my $ports = $opts->{port}) {
+        $port_opts = join(" ", map {"-p $_"} @$ports);
+    }
 
     my ( $priv, $pub ) = ensure_ssh_key();
 
@@ -234,7 +239,7 @@ sub create_env {
 
     my $image_name = "$docker_user/${type}dev:latest";
     my $cmd
-        = "docker run -d -p 22 --name ddc_$env_name -v $env_dir:/home/$user -v $ENV{PWD}:/home/$user/$topmost_pathpart --hostname $env_name $image_name";
+        = "docker run -d -p 22 $port_opts --name ddc_$env_name -v $env_dir:/home/$user -v $ENV{PWD}:/home/$user/$topmost_pathpart --hostname $env_name $image_name";
     DEBUG($cmd);
     `$cmd`;
 }

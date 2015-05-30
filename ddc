@@ -361,15 +361,17 @@ sub connect_env {
         exit(-2);
     }
 
+    my $connect_host = 'localhost';
+    if ( $ENV{'DOCKER_HOST'} && $ENV{'DOCKER_HOST'} =~ m{tcp://([\d.]+):\d+} )
+    {
+        $connect_host = $1;
+    }
     my @cmd = (
-        qw(ssh -A localhost -p),
-        $existing->{$env_name}{container}{ports}{22}{port},
-        '-i',
-        $priv,
-        '-o',
-        'UserKnownHostsFile /dev/null',
-        '-o',
-        'StrictHostKeyChecking no'
+        qw(ssh -A), $connect_host,
+        '-p',       $existing->{$env_name}{container}{ports}{22}{port},
+        '-i',       $priv,
+        '-o',       'UserKnownHostsFile /dev/null',
+        '-o',       'StrictHostKeyChecking no'
     );
     system @cmd;
 }
@@ -476,6 +478,7 @@ sub rebuild_env {
     DEBUG($cmd);
     `$cmd`;
 
+    # TODO: run with additional ports from original start, if any
     $cmd
         = "docker run -d -p 22 --name ddc_$env_name --volumes-from ddc_${env_name}_old --hostname $env_name $image_name";
     DEBUG($cmd);

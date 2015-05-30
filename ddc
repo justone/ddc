@@ -247,14 +247,14 @@ sub ensure_ssh_key {
 sub ensure_image {
     my ($type) = @_;
 
-    # get dockerfile dir
-    $dockerfile_base = $ENV{DDC_DOCKERFILES};
-    if ( !$dockerfile_base ) {
-        ERROR(
-            "Please specify the base directory for Dockerfiles with the DDC_DOCKERFILES environment variable."
-        );
-        exit(-2);
-    }
+    # # get dockerfile dir
+    # $dockerfile_base = $ENV{DDC_DOCKERFILES};
+    # if ( !$dockerfile_base ) {
+    #     ERROR(
+    #         "Please specify the base directory for Dockerfiles with the DDC_DOCKERFILES environment variable."
+    #     );
+    #     exit(-2);
+    # }
 
     my $images = load_images();
     # print STDERR Dumper($images); use Data::Dumper;

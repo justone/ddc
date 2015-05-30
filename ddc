@@ -261,8 +261,9 @@ sub ensure_image {
 
     my $image = _image_name_for_type($type);
     if (!$images->{$image}) {
-        ERROR("Image for $type not found, build before running.");
-        exit(-2);
+        DEBUG("Image for $type not found, building.");
+
+        my $dockerfiles = load_dockerfiles();
     }
 }
 
@@ -270,6 +271,25 @@ sub _image_name_for_type {
     my ($type) = @_;
 
     return "$docker_user/${type}dev";
+}
+
+sub load_dockerfiles {
+    my @dockerfiles = glob "$ENV{DDC_DOCKERFILES}/*/Dockerfile";
+
+    # print STDERR Dumper(\@dockerfiles); use Data::Dumper;
+    foreach my $dockerfile (@dockerfiles) {
+        my $lines;
+        {
+            local $/ = undef;
+            local *FILE;
+            open FILE, "<$dockerfile";
+            $lines = <FILE>;
+            close FILE
+        }
+        my @lines = split( /\n/, $lines );
+        my ($from_line) = grep { $_ =~ m/from/i } @lines;
+        INFO("$from_line");
+    }
 }
 
 sub load_images {

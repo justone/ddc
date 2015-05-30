@@ -187,15 +187,6 @@ sub run_ddc {
         Getopt::Long::Configure('no_pass_through');
     }
 
-    # get dockerfile dir
-    $dockerfile_base = $ENV{DDC_DOCKERFILES};
-    if ( !$dockerfile_base ) {
-        ERROR(
-            "Please specify the base directory for Dockerfiles with the DDC_DOCKERFILES environment variable."
-        );
-        exit(-2);
-    }
-
     if ( exists $commands->{$command} ) {
         if ( $opts{'help'} ) {
             $commands->{'help'}->( [$command] );
@@ -237,7 +228,7 @@ sub create_env {
     mkpath( "$env_dir/.ssh", 0, 0700 );
     copy( $pub, "$env_dir/.ssh/authorized_keys" );
 
-    my $image_name = "$docker_user/${type}dev:latest";
+    my $image_name = _image_name_for_type($type);
     my $cmd
         = "docker run -d -p 22 $port_opts --name ddc_$env_name -v $env_dir:/home/$user -v $ENV{PWD}:/home/$user/$topmost_pathpart --hostname $env_name $image_name";
     DEBUG($cmd);
@@ -254,8 +245,47 @@ sub ensure_ssh_key {
 }
 
 sub ensure_image {
+    my ($type) = @_;
 
-    # TODO: implement
+    # get dockerfile dir
+    $dockerfile_base = $ENV{DDC_DOCKERFILES};
+    if ( !$dockerfile_base ) {
+        ERROR(
+            "Please specify the base directory for Dockerfiles with the DDC_DOCKERFILES environment variable."
+        );
+        exit(-2);
+    }
+
+    my $images = load_images();
+    # print STDERR Dumper($images); use Data::Dumper;
+
+    my $image = _image_name_for_type($type);
+    if (!$images->{$image}) {
+        ERROR("Image for $type not found, build before running.");
+        exit(-2);
+    }
+}
+
+sub _image_name_for_type {
+    my ($type) = @_;
+
+    return "$docker_user/${type}dev";
+}
+
+sub load_images {
+    my @docker_images_output = split( /\n/, `docker images` );
+    my $images;
+    foreach my $docker_line (@docker_images_output) {
+        next if $docker_line =~ m/REPOSITORY/;
+        my @elements = split( /\s\s+/, $docker_line );
+        my ( $name, $tag, $id, $age, $size ) = @elements;
+        $images->{$name}{$tag} = {
+            id   => $id,
+            age  => $age,
+            size => $size,
+            }
+    }
+    return $images;
 }
 
 sub load_existing {

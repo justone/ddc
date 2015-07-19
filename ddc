@@ -120,13 +120,14 @@ $commands = {
     'rebuild' => sub {
         my $argv = shift;
 
+        GetOptionsFromArray( $argv, \%opts, 'port|p=s@' );
         my ($env_name) = @$argv;
         if ( !$env_name ) {
             ERROR("Specify name of environment.");
             exit(-2);
         }
 
-        rebuild_env($env_name);
+        rebuild_env($env_name, \%opts);
     },
     'help' => sub {
         my $argv = shift;
@@ -490,12 +491,29 @@ sub destroy_env {
 }
 
 sub rebuild_env {
-    my ($env_name) = @_;
+    my ($env_name, $opts) = @_;
 
     my $existing = load_existing();
     if ( !$existing->{$env_name} ) {
         ERROR("Environment $env_name does not exist.");
         exit(-2);
+    }
+
+    my $port_opts = '';
+    if (my $ports = $opts->{port}) {
+        $port_opts .= join(" ", map {"-p $_"} @$ports);
+    }
+    else {
+        my $cont_ports = $existing->{$env_name}{container}{ports};
+        foreach my $port (keys %{$cont_ports}) {
+            next if $port == 22;
+            if ($cont_ports->{$port}{port} < 30000) {
+                $port_opts .= "-p $cont_ports->{$port}{port}:$port "
+            }
+            else {
+                $port_opts .= "-p $port "
+            }
+        }
     }
 
     stop_env($env_name);
@@ -508,9 +526,8 @@ sub rebuild_env {
     DEBUG($cmd);
     `$cmd`;
 
-    # TODO: run with additional ports from original start, if any
     $cmd
-        = "docker run -d -p 22 --name ddc_$env_name --volumes-from ddc_${env_name}_old --hostname $env_name $image_name";
+        = "docker run -d -p 22 $port_opts --name ddc_$env_name --volumes-from ddc_${env_name}_old --hostname $env_name $image_name";
     DEBUG($cmd);
     `$cmd`;
 

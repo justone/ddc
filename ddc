@@ -117,6 +117,17 @@ $commands = {
 
         connect_env($env_name);
     },
+    'inspect' => sub {
+        my $argv = shift;
+
+        my ($env_name) = @$argv;
+        if ( !$env_name ) {
+            ERROR("Specify name of environment.");
+            exit(-2);
+        }
+
+        inspect_env($env_name);
+    },
     'rebuild' => sub {
         my $argv = shift;
 
@@ -405,6 +416,18 @@ sub connect_env {
         '-o',       'StrictHostKeyChecking no'
     );
     system @cmd;
+}
+
+sub inspect_env {
+    my ($env_name) = @_;
+
+    my $existing = load_existing();
+    if ( !$existing->{$env_name} ) {
+        ERROR("Environment $env_name does not exist.");
+        exit(-2);
+    }
+
+    print STDERR Dumper($existing->{$env_name}); use Data::Dumper;
 }
 
 sub stop_env {

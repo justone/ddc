@@ -270,8 +270,10 @@ sub ensure_image {
 
     my $images = load_images();
     # print STDERR Dumper($images); use Data::Dumper;
+    # print STDERR "$type\n";
 
-    my $image = _image_name_for_type($type);
+    my ($image, $tag) = _image_name_for_type($type);
+    # print STDERR "$image\n";
     if (!$images->{$image}) {
         ERROR("Image for $type not found, build before running.");
         exit(-2);
@@ -281,7 +283,13 @@ sub ensure_image {
 sub _image_name_for_type {
     my ($type) = @_;
 
-    return "$docker_user/${type}dev";
+    my $base = "$docker_user/${type}dev";
+    my $tag = 'latest';
+
+    if (wantarray()) {
+        return ($base, $tag);
+    }
+    return "${base}:${tag}";
 }
 
 sub load_images {
@@ -357,7 +365,7 @@ sub load_existing {
 
         if ($container) {
             my $image = $container->{image};
-            my ($type) = $image =~ m/$docker_user\/(.+)dev:latest/;
+            my ($type) = $image =~ m/$docker_user\/(.+)dev(:latest)?/;
             $existing_envs->{$env_dir}{type} = $type;
         }
     }
